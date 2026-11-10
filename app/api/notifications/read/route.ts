@@ -6,7 +6,8 @@ import { posInt } from '@/lib/input';
 
 /**
  * POST /api/notifications/read
- * `{ id }` marks that notification read (only the caller's own); `{}` marks every unread one read.
+ * `{ id }` marks that notification read (only the caller's own); `{ upTo }` marks every one up to that id read (the
+ * bell, when opened: what it showed, not anything that arrived since); `{}` marks every unread one read.
  */
 export const POST = route(async (req: Request) => {
   checkOrigin(req);
@@ -21,10 +22,14 @@ export const POST = route(async (req: Request) => {
       body = null;
     }
   }
-  const id = body && typeof body === 'object' ? posInt((body as { id?: unknown }).id) : null;
+  const fields = body && typeof body === 'object' ? (body as { id?: unknown; upTo?: unknown }) : {};
+  const id = posInt(fields.id);
+  const upTo = posInt(fields.upTo);
 
   if (id) {
     await db.notification.updateMany({ where: { id, userId: user.id }, data: { isRead: true } });
+  } else if (upTo) {
+    await db.notification.updateMany({ where: { userId: user.id, isRead: false, id: { lte: upTo } }, data: { isRead: true } });
   } else {
     await db.notification.updateMany({ where: { userId: user.id, isRead: false }, data: { isRead: true } });
   }

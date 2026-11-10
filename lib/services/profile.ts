@@ -87,6 +87,19 @@ async function latestClearance(studentId: number): Promise<ProfileClearance | nu
   };
 }
 
+/**
+ * "Street, Barangay, City, Province, Region, Postal code" without blanks or a repeat: in the address lists each
+ * Metro Manila city is its own province too, which read "City of Caloocan, City of Caloocan".
+ */
+function joinAddress(parts: (string | null | undefined)[]): string | null {
+  const out: string[] = [];
+  for (const raw of parts) {
+    const part = raw?.trim();
+    if (part && part !== out[out.length - 1]) out.push(part);
+  }
+  return out.join(', ') || null;
+}
+
 async function studentInfo(user: SessionUser): Promise<{ info: StudentInfo; hasPhoto: boolean } | null> {
   const s = user.student;
   if (!s) return null;
@@ -101,7 +114,7 @@ async function studentInfo(user: SessionUser): Promise<{ info: StudentInfo; hasP
     phone: user.phone ?? app?.contactNumber ?? null,
     currentAddress:
       s.currentAddress ??
-      (app ? [app.street, app.barangay, app.city, app.province, app.region, app.postalCode].filter((p) => p && p.trim()).join(', ') || null : null),
+      (app ? joinAddress([app.street, app.barangay, app.city, app.province, app.region, app.postalCode]) : null),
     emergencyName: s.emergencyName ?? (app ? joinName(app.guardianFirst, app.guardianMiddle, app.guardianLast) || null : null),
     emergencyContact: s.emergencyContact ?? app?.guardianContact ?? null,
   };

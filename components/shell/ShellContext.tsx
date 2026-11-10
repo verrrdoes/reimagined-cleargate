@@ -13,8 +13,10 @@ export type ShellState = {
   serverNow: string;
   /** Fetches GET /api/me now. */
   refresh: () => Promise<void>;
-  /** Marks one notification read (or all, without an id). Never rejects. */
-  markRead: (id?: number) => Promise<void>;
+  /** Marks one notification read. Never rejects. */
+  markRead: (id: number) => Promise<void>;
+  /** Marks every notification up to `upTo` read: the bell, when it opens. Never rejects. */
+  markShownRead: (upTo: number) => Promise<void>;
   /** The bell pauses polling while it is open, so the list does not move under the pointer. */
   pausePolling: (paused: boolean) => void;
 };
@@ -89,26 +91,27 @@ export function ShellProvider({ data, children }: { data: ShellData; children: R
     };
   }, [refresh]);
 
-  const markRead = useCallback(async (id?: number) => {
+  /** Shows the matching notifications as read at once, then tells the server. */
+  const send = useCallback(async (body: { id: number } | { upTo: number }, read: (n: NotificationView) => boolean) => {
     const current = liveRef.current;
     setPolled({
       base: baseRef.current,
-      value: {
-        ...current,
-        notifications: current.notifications.map((n) => (id === undefined || n.id === id ? { ...n, unread: false } : n)),
-      },
+      value: { ...current, notifications: current.notifications.map((n) => (read(n) ? { ...n, unread: false } : n)) },
     });
     try {
       await fetch('/api/notifications/read', {
         method: 'POST',
         credentials: 'same-origin',
         headers: { 'content-type': 'application/json', accept: 'application/json' },
-        body: JSON.stringify(id === undefined ? {} : { id }),
+        body: JSON.stringify(body),
       });
     } catch {
       // Shown as read here; the next poll brings the server's view back if the request did not land.
     }
   }, []);
+
+  const markRead = useCallback((id: number) => send({ id }, (n) => n.id === id), [send]);
+  const markShownRead = useCallback((upTo: number) => send({ upTo }, (n) => n.id <= upTo), [send]);
 
   const pausePolling = useCallback((paused: boolean) => {
     pausedRef.current = paused;
@@ -121,6 +124,7 @@ export function ShellProvider({ data, children }: { data: ShellData; children: R
     serverNow: live.serverNow,
     refresh,
     markRead,
+    markShownRead,
     pausePolling,
   };
 

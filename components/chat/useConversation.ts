@@ -56,14 +56,20 @@ export function useConversation(itemId: number | null, viewer: ChatViewer, onAct
     activityRef.current = onActivity;
   });
 
-  const accept = useCallback(
-    (key: number, data: Conversation) => {
-      if (keyRef.current !== key) return;
-      setState({ key, data, error: null });
-      if (data.markedRead > 0) {
-        void refresh();
-        activityRef.current?.();
-      }
+  const accept = useCallback((key: number, data: Conversation) => {
+    if (keyRef.current !== key) return;
+    setState({ key, data, error: null });
+  }, []);
+
+  /**
+   * Runs for every reply, even one a newer load replaces: two overlapping loads (a poll and a tab coming back, or
+   * React running the effect twice in development) both mark read, but only the first sees the messages as unread.
+   */
+  const noteRead = useCallback(
+    (data: Conversation) => {
+      if (data.markedRead === 0) return;
+      void refresh();
+      activityRef.current?.();
     },
     [refresh],
   );
@@ -73,6 +79,7 @@ export function useConversation(itemId: number | null, viewer: ChatViewer, onAct
       const seq = ++seqRef.current;
       try {
         const data = await call(`/api/messages?itemId=${key}`);
+        noteRead(data);
         if (seq === seqRef.current) accept(key, data);
       } catch (e) {
         if (seq !== seqRef.current || keyRef.current !== key) return;
@@ -81,7 +88,7 @@ export function useConversation(itemId: number | null, viewer: ChatViewer, onAct
         setState((s) => (s.key === key && s.data ? s : { key, data: null, error: message }));
       }
     },
-    [accept],
+    [accept, noteRead],
   );
 
   useEffect(() => {
@@ -122,6 +129,7 @@ export function useConversation(itemId: number | null, viewer: ChatViewer, onAct
         const data = await call('/api/messages', { method: 'POST', body: JSON.stringify({ itemId: key, body }) });
         seqRef.current++; // a poll that started before the send must not overwrite this newer thread
         accept(key, data);
+        if (data.markedRead > 0) void refresh();
         activityRef.current?.();
         return true;
       } catch (e) {
@@ -132,7 +140,7 @@ export function useConversation(itemId: number | null, viewer: ChatViewer, onAct
         setSending(false);
       }
     },
-    [accept, viewer],
+    [accept, refresh, viewer],
   );
 
   const current = state.key === itemId ? state : null;

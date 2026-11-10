@@ -159,7 +159,9 @@ export const split = 'grid grid-cols-[minmax(0,1fr)_320px] gap-6 items-start max
 
 /* ---------- Tables ---------- */
 
-export const tableWrap = 'w-full overflow-x-auto print:overflow-visible';
+// `relative` keeps screen-reader-only text (absolutely positioned) inside the scroll box; without it, a hidden label in
+// the last column of a wide table widens the whole page on a phone.
+export const tableWrap = 'relative w-full overflow-x-auto print:overflow-visible';
 
 /** `.table`: header and cell styling comes from here, so th and td need no classes of their own. */
 export const table =
@@ -236,7 +238,7 @@ export const textTone: Record<PillTone, string> = {
 /* ---------- Tabs and filter chips ---------- */
 
 export const tabs =
-  'flex gap-6 mb-6 border-b border-border overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden';
+  'relative flex gap-6 mb-6 border-b border-border overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden';
 export const tabLink =
   'inline-flex items-center gap-1.5 h-10 -mb-px border-b-2 border-transparent text-muted font-medium whitespace-nowrap ' +
   'no-underline hover:text-text hover:no-underline ' +

@@ -17,6 +17,25 @@ const STATUS_OPTION: Record<ItemStatus, string> = {
   approved: 'Approved: cleared',
 };
 
+type Wording = { remarks: string; description: string; nextStep: string };
+
+/**
+ * What the student reads after a status change, for the fields staff haven't typed in: without it, moving an
+ * approved student to Needs action kept "has cleared your account" (an empty field keeps the current text).
+ * Needs action has no default explanation; staff write what the student must do.
+ */
+function wordingFor(status: ItemStatus, office: string): Wording {
+  if (status === 'approved') return { remarks: 'Cleared by the office', description: `${office} has cleared your account.`, nextStep: '' };
+  if (status === 'pending') {
+    return {
+      remarks: 'Awaiting review',
+      description: `${office} is reviewing your account.`,
+      nextStep: `Wait for ${office} to review your account, or visit the office.`,
+    };
+  }
+  return { remarks: 'Action needed', description: '', nextStep: '' };
+}
+
 function EditorForm({ row, formId, onBusy, onSaved }: { row: QueueRow; formId: string; onBusy: (busy: boolean) => void; onSaved: () => void }) {
   const toast = useToast();
   const [status, setStatus] = useState<ItemStatus>(row.status);
@@ -25,10 +44,22 @@ function EditorForm({ row, formId, onBusy, onSaved }: { row: QueueRow; formId: s
   const [description, setDescription] = useState(row.description);
   const [nextStep, setNextStep] = useState(row.nextStep ?? '');
   const [note, setNote] = useState('');
+  const [edited, setEdited] = useState<ReadonlySet<keyof Wording>>(() => new Set());
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const ids = { status: useId(), task: useId(), remarks: useId(), description: useId(), next: useId(), note: useId(), error: useId() };
   const approved = status === 'approved';
+
+  const typed = (field: keyof Wording) => setEdited((s) => (s.has(field) ? s : new Set(s).add(field)));
+
+  /** Swaps the wording staff haven't typed for the new status's (back to the saved text on the saved status). */
+  function changeStatus(next: ItemStatus) {
+    setStatus(next);
+    const w = next === row.status ? { remarks: row.remarks, description: row.description, nextStep: row.nextStep ?? '' } : wordingFor(next, row.officeName);
+    if (!edited.has('remarks')) setRemarks(w.remarks);
+    if (!edited.has('description')) setDescription(w.description);
+    if (!edited.has('nextStep')) setNextStep(w.nextStep);
+  }
 
   function setWorking(v: boolean) {
     setBusy(v);
@@ -37,6 +68,10 @@ function EditorForm({ row, formId, onBusy, onSaved }: { row: QueueRow; formId: s
 
   async function save() {
     if (busy) return;
+    if (status === 'needs_action' && !description.trim()) {
+      setError('Tell the student what they need to do.');
+      return;
+    }
     setWorking(true);
     setError(null);
     try {
@@ -92,7 +127,7 @@ function EditorForm({ row, formId, onBusy, onSaved }: { row: QueueRow; formId: s
         <label htmlFor={ids.status} className={fieldLabel}>
           Status
         </label>
-        <select id={ids.status} className={select} value={status} data-autofocus onChange={(e) => setStatus(e.target.value as ItemStatus)}>
+        <select id={ids.status} className={select} value={status} data-autofocus onChange={(e) => changeStatus(e.target.value as ItemStatus)}>
           {ITEM_STATUSES.map((s) => (
             <option key={s} value={s}>
               {STATUS_OPTION[s]}
@@ -112,14 +147,36 @@ function EditorForm({ row, formId, onBusy, onSaved }: { row: QueueRow; formId: s
         <label htmlFor={ids.remarks} className={fieldLabel}>
           Short remark <span className={fieldOptional}>(shown on the office tile)</span>
         </label>
-        <input id={ids.remarks} className={input} maxLength={120} value={remarks} onChange={(e) => setRemarks(e.target.value)} />
+        <input
+          id={ids.remarks}
+          className={input}
+          maxLength={120}
+          value={remarks}
+          onChange={(e) => {
+            typed('remarks');
+            setRemarks(e.target.value);
+          }}
+        />
       </div>
 
       <div className={field}>
         <label htmlFor={ids.description} className={fieldLabel}>
           Explanation for the student
         </label>
-        <textarea id={ids.description} className={textarea} rows={3} maxLength={255} value={description} onChange={(e) => setDescription(e.target.value)} />
+        <textarea
+          id={ids.description}
+          className={textarea}
+          rows={3}
+          maxLength={255}
+          placeholder={status === 'needs_action' ? 'What the student needs to do' : undefined}
+          aria-invalid={error !== null && status === 'needs_action' && !description.trim() ? true : undefined}
+          aria-describedby={error ? ids.error : undefined}
+          value={description}
+          onChange={(e) => {
+            typed('description');
+            setDescription(e.target.value);
+          }}
+        />
       </div>
 
       <div className={field}>
@@ -133,7 +190,10 @@ function EditorForm({ row, formId, onBusy, onSaved }: { row: QueueRow; formId: s
           disabled={approved}
           placeholder={approved ? 'Not needed once approved' : 'What the student should do next'}
           value={approved ? '' : nextStep}
-          onChange={(e) => setNextStep(e.target.value)}
+          onChange={(e) => {
+            typed('nextStep');
+            setNextStep(e.target.value);
+          }}
         />
       </div>
 

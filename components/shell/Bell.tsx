@@ -1,12 +1,12 @@
 'use client';
 
 import { useRouter } from 'next/navigation';
-import { useEffect, useId, type MouseEvent } from 'react';
+import { useEffect, useId, useState, type MouseEvent } from 'react';
 import { cn } from '@/components/ui/cn';
 import { Icon, type IconName } from '@/components/ui/Icon';
 import { OfficeIcon } from '@/components/ui/OfficeIcon';
 import { useNow } from '@/components/ui/clock';
-import { iconButton, linkButton, popover, popoverAnchor, popoverHead, textTone } from '@/components/ui/recipes';
+import { iconButton, popover, popoverAnchor, popoverHead, textTone } from '@/components/ui/recipes';
 import { timeAgo } from '@/lib/time';
 import type { NotificationView, Tone } from '@/lib/types';
 import { useShell } from './ShellContext';
@@ -39,17 +39,34 @@ function NotificationIcon({ n }: { n: NotificationView }) {
   return <Icon name={name} size={16} className={cls} />;
 }
 
+/**
+ * Opening the bell marks what it shows read, so the count clears. The ones that were new keep their dot while the
+ * list stays open, so it is still clear which they were.
+ */
 export function Bell() {
-  const { notifications, serverNow, markRead, pausePolling } = useShell();
+  const { notifications, serverNow, markRead, markShownRead, pausePolling } = useShell();
   const { open, setOpen, wrapRef, buttonRef } = usePopover();
   const router = useRouter();
   const panelId = useId();
   const now = useNow(30_000, serverNow);
   const unread = notifications.filter((n) => n.unread).length;
+  /** Unread when the bell was opened. */
+  const [fresh, setFresh] = useState<ReadonlySet<number>>(() => new Set());
 
   useEffect(() => {
     pausePolling(open);
   }, [open, pausePolling]);
+
+  function toggle() {
+    if (open) {
+      setOpen(false);
+      return;
+    }
+    const newOnes = notifications.filter((n) => n.unread).map((n) => n.id);
+    setFresh(new Set(newOnes));
+    setOpen(true);
+    if (newOnes.length) void markShownRead(Math.max(...notifications.map((n) => n.id)));
+  }
 
   function follow(e: MouseEvent<HTMLAnchorElement>, n: NotificationView) {
     const link = n.link;
@@ -74,7 +91,7 @@ export function Bell() {
         aria-label={unread > 0 ? `Notifications, ${unread} unread` : 'Notifications'}
         aria-expanded={open}
         aria-controls={panelId}
-        onClick={() => setOpen((o) => !o)}
+        onClick={toggle}
       >
         <Icon name="bell" size={18} />
         {unread > 0 ? (
@@ -94,26 +111,23 @@ export function Bell() {
         <div id={panelId} className={popover} role="region" aria-label="Notifications">
           <div className={popoverHead}>
             <h2>Notifications</h2>
-            {unread > 0 ? (
-              <button type="button" className={linkButton} onClick={() => void markRead()}>
-                Mark all read
-              </button>
-            ) : null}
+            {fresh.size ? <span className="text-13 text-muted tabular-nums">{fresh.size} new</span> : null}
           </div>
           {notifications.length === 0 ? (
             <p className="px-4 py-8 text-center text-muted">No notifications yet.</p>
           ) : (
             <ul className="max-h-[min(480px,70svh)] m-0 p-1 overflow-y-auto list-none">
               {notifications.map((n) => {
+                const isNew = n.unread || fresh.has(n.id);
                 const inner = (
                   <>
                     <NotificationIcon n={n} />
-                    <span className={cn('min-w-0', n.unread ? 'font-semibold' : 'font-normal')}>
+                    <span className={cn('min-w-0', isNew ? 'font-semibold' : 'font-normal')}>
                       {n.title}
-                      {n.unread ? (
+                      {isNew ? (
                         <>
                           <span className="inline-block size-1.5 ml-1.5 rounded-full bg-accent align-middle" aria-hidden="true" />
-                          <span className="sr-only"> (unread)</span>
+                          <span className="sr-only"> (new)</span>
                         </>
                       ) : null}
                     </span>

@@ -96,8 +96,7 @@ export function PasswordRequestsTable({ rows }: { rows: PasswordRequestRow[] }) 
           body="When a student asks from the Forgot password page, their request appears here."
         />
       ) : (
-        // relative: the sr-only header label is absolutely placed and would otherwise widen the page on phones.
-        <div className={cn(tableWrap, 'relative')}>
+        <div className={tableWrap}>
           <table className={table}>
             <thead>
               <tr>
