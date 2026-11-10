@@ -1,7 +1,8 @@
 // Demo evidence PDFs for the test data: one document per student and office, printed with that student's
 // name and number and matching what the office asked for (prisma/test-data.ts REQUIREMENT). `flawed` makes
 // the version an office returned, showing the problem named in its return reason (test-data.ts RETURNS).
-// Dependency-free: a one-page PDF with the standard Helvetica fonts and an uncompressed content stream.
+// Written with the dependency-free one-page PDF writer in lib/pdf.ts.
+import { pdfString, writePdf } from '../lib/pdf';
 import { TIME_ZONE, manilaYear } from '../lib/time';
 
 export const DEMO_EVIDENCE_OFFICES = ['library', 'accounting', 'registrar', 'guidance', 'dean', 'property'] as const;
@@ -135,16 +136,6 @@ const DARK = '0.067 0.094 0.153 rg';
 const GRAY = '0.42 0.45 0.5 rg';
 const BOX_FILL = '0.937 0.949 0.965 rg';
 
-/** A PDF literal string in WinAnsi: characters outside Latin-1 become "?", and \ ( ) are escaped. */
-function pdfString(s: string): string {
-  return Array.from(s, (ch) => {
-    const code = ch.codePointAt(0)!;
-    if (code < 0x20) return ' ';
-    if (code > 0xff) return '?';
-    return ch === '\\' || ch === '(' || ch === ')' ? `\\${ch}` : ch;
-  }).join('');
-}
-
 const text = (font: 'F1' | 'F2', size: number, color: string, y: number, s: string, x = PAGE.x) =>
   `BT /${font} ${size} Tf ${color} ${x} ${y} Td (${pdfString(s)}) Tj ET`;
 const BOX_TEXT_X = PAGE.x + 16;
@@ -182,37 +173,6 @@ function contentStream(doc: Doc, input: EvidenceInput): string {
   }
   ops.push(text('F1', 9, GRAY, 60, 'Demo evidence for the ClearGate sample data. Not a real document.'));
   return ops.join('\n');
-}
-
-const latin1 = (s: string) => Buffer.from(s, 'latin1');
-
-function writePdf(content: string): Uint8Array {
-  const stream = latin1(content);
-  const bodies = [
-    latin1('<< /Type /Catalog /Pages 2 0 R >>'),
-    latin1('<< /Type /Pages /Kids [3 0 R] /Count 1 >>'),
-    latin1(
-      `<< /Type /Page /Parent 2 0 R /MediaBox [0 0 ${PAGE.w} ${PAGE.h}] ` +
-        '/Resources << /Font << /F1 4 0 R /F2 5 0 R >> >> /Contents 6 0 R >>',
-    ),
-    latin1('<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica /Encoding /WinAnsiEncoding >>'),
-    latin1('<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica-Bold /Encoding /WinAnsiEncoding >>'),
-    Buffer.concat([latin1(`<< /Length ${stream.length} >>\nstream\n`), stream, latin1('\nendstream')]),
-  ];
-
-  const parts = [latin1('%PDF-1.4\n%\xe2\xe3\xcf\xd3\n')];
-  let offset = parts[0].length;
-  const offsets: number[] = [];
-  bodies.forEach((body, i) => {
-    const obj = Buffer.concat([latin1(`${i + 1} 0 obj\n`), body, latin1('\nendobj\n')]);
-    offsets.push(offset);
-    parts.push(obj);
-    offset += obj.length;
-  });
-  // Each cross-reference entry is exactly 20 bytes: 18 characters, a space and a newline.
-  const xref = ['xref', `0 ${bodies.length + 1}`, '0000000000 65535 f ', ...offsets.map((o) => `${String(o).padStart(10, '0')} 00000 n `)];
-  parts.push(latin1(`${xref.join('\n')}\ntrailer\n<< /Size ${bodies.length + 1} /Root 1 0 R >>\nstartxref\n${offset}\n%%EOF\n`));
-  return new Uint8Array(Buffer.concat(parts));
 }
 
 /** The demo document a student uploaded to `office`, with their own name and number on it. */

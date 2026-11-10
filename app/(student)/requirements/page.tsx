@@ -225,8 +225,9 @@ export default async function RequirementsPage({ searchParams }: { searchParams:
             <p className="text-muted">
               {clearance.isEligible
                 ? 'You’re fully cleared and can enroll next semester.'
-                : 'Once fully cleared, you can enroll next semester.'}
+                : 'Once fully cleared, you can enroll next semester and download your clearance certificate.'}
             </p>
+            {clearance.isEligible ? <a href="/api/certificate?download=1">Download your certificate</a> : null}
             <Link href="/clearance-status">See clearance status</Link>
           </section>
         </aside>

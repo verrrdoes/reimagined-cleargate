@@ -3,6 +3,9 @@ import type { ItemStatus, SubmissionStatusName, TermName } from '@/lib/types';
 
 export const SCHOOL_DOMAIN = 'cgateway.edu.ph';
 
+/** The school printed on the clearance certificate and on its public check page. */
+export const SCHOOL_NAME = 'IMMACULADA CONCEPTION COLLEGE';
+
 export const TERM_LABEL: Record<TermName, string> = {
   first_semester: '1st Semester',
   second_semester: '2nd Semester',

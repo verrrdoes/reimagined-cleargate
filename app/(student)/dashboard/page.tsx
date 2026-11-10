@@ -22,6 +22,7 @@ import { EvidenceLine } from '@/components/student/EvidenceLine';
 import { ItemActions } from '@/components/student/ItemActions';
 import { NoClearance } from '@/components/student/NoClearance';
 import { ProgressBar } from '@/components/student/ProgressBar';
+import { CertificateCard } from '@/components/student/CertificateCard';
 import { StudentDialogs } from '@/components/student/StudentDialogs';
 import { nextStepText, ordinal, plural, statusHref } from '@/components/student/format';
 import { statusDot, studentLayout } from '@/components/student/layout';
@@ -147,16 +148,7 @@ export default async function DashboardPage() {
 
       <div className={cn(studentLayout.now, clearance.isEligible && 'grid-cols-1')}>
         {clearance.isEligible ? (
-          <div className={cn(alert('success'), 'min-w-0 p-4')} role="status">
-            <Icon name="check-circle" size={20} />
-            <div className={alertBody}>
-              <h2 className={FOCUS_TITLE}>You’re fully cleared</h2>
-              <p>Every office has signed off. You are eligible to enroll next semester.</p>
-              <p>
-                <Link href="/clearance-status">See your clearance status</Link>
-              </p>
-            </div>
-          </div>
+          <CertificateCard clearanceId={clearance.clearanceId} academicYear={clearance.academicYear} />
         ) : focus ? (
           <section
             className={cn(panel(), CARD, FOCUS_TONE[focus.status === 'needs_action' ? 'action' : 'pending'])}
