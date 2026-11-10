@@ -67,7 +67,7 @@ export async function pageUser(portal: 'student' | 'staff'): Promise<SessionUser
   const user = await readSession();
   if (!user) redirect(portal === 'student' ? '/' : '/staff-login');
   if (user.mustChangePassword) redirect('/change-password');
-  if (portal === 'student' && user.role !== 'student') redirect('/staff');
+  if (portal === 'student' && user.role !== 'student') redirect('/overview');
   if (portal === 'staff' && user.role === 'student') redirect('/dashboard');
   return user;
 }
@@ -82,14 +82,14 @@ export async function anyPageUser(): Promise<SessionUser> {
 
 export async function registrarPage(): Promise<SessionUser> {
   const user = await pageUser('staff');
-  if (!isRegistrar(user)) redirect('/staff');
+  if (!isRegistrar(user)) redirect('/overview');
   return user;
 }
 
 export async function adminPage(): Promise<SessionUser> {
   const user = await pageUser('staff');
-  if (user.role !== 'admin') redirect('/staff');
+  if (user.role !== 'admin') redirect('/overview');
   return user;
 }
 
-export const portalHome = (role: Role) => (role === 'student' ? '/dashboard' : '/staff');
+export const portalHome = (role: Role) => (role === 'student' ? '/dashboard' : '/overview');

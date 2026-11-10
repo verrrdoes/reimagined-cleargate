@@ -22,6 +22,7 @@ export function navItems(d: Pick<ShellData, 'portal' | 'isRegistrar' | 'isAdmin'
     ];
   }
   const items: NavItem[] = [
+    { href: '/overview', label: 'Dashboard', icon: 'grid' },
     { href: '/staff', label: 'Pending list', icon: 'inbox', also: ['/review'] },
     { href: '/messages', label: 'Messages', icon: 'messages', badge: 'messages' },
     { href: '/history', label: 'Review history', icon: 'history' },
@@ -52,7 +53,7 @@ export function isNavActive(pathname: string, item: NavItem): boolean {
   return under(pathname, item.href) || (item.also ?? []).some((p) => under(pathname, p));
 }
 
-export const portalHome = (portal: Portal) => (portal === 'student' ? '/dashboard' : '/staff');
+export const portalHome = (portal: Portal) => (portal === 'student' ? '/dashboard' : '/overview');
 
 /* ---------- Top-bar search ---------- */
 
