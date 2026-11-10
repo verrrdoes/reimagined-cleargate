@@ -1,0 +1,508 @@
+generator client {
+  provider     = "prisma-client"
+  output       = "../generated/prisma"
+  moduleFormat = "esm"
+}
+
+// Connection URLs live in prisma.config.ts (migrations) and lib/db.ts (runtime, via @prisma/adapter-pg).
+datasource db {
+  provider = "postgresql"
+}
+
+enum Role {
+  student
+  staff
+  admin
+}
+
+enum ApplicationStatus {
+  pending
+  approved
+  rejected
+}
+
+enum Sex {
+  Male
+  Female
+}
+
+/// Declared oldest → newest so ORDER BY term DESC = newest term (replaces FIELD()).
+/// Labels: first_semester "1st Semester", second_semester "2nd Semester", summer "Summer".
+enum Term {
+  first_semester
+  second_semester
+  summer
+}
+
+/// Declared in display order so ORDER BY status ASC = needs_action, pending, approved.
+enum ItemStatus {
+  needs_action
+  pending
+  approved
+}
+
+enum SubmissionStatus {
+  submitted
+  approved
+  returned
+  replaced
+}
+
+enum NotificationTone {
+  needs_action
+  pending
+  approved
+  info
+}
+
+enum ReminderAudience {
+  outstanding
+  overdue
+  student
+}
+
+/// A password request the Registrar decides in person. "Expired" is not stored: it follows from expires_at / approved_until.
+enum PasswordRequestStatus {
+  pending // waiting for the Registrar
+  approved // allowed; the requesting device may set a password until approved_until
+  declined
+  used
+  cancelled // by the student, or because another request of the same account was allowed
+  withdrawn // the Registrar took the approval back before it was used
+}
+
+/// Legacy values '3d', '1d', 'overdue'.
+enum AlertStage {
+  three_days
+  one_day
+  overdue
+}
+
+model Program {
+  id           Int           @id @default(autoincrement()) @map("program_id")
+  code         String        @unique @db.VarChar(10)
+  name         String        @db.VarChar(120)
+  students     Student[]
+  applications Application[]
+
+  @@map("programs")
+}
+
+model AcademicYear {
+  id         Int              @id @default(autoincrement()) @map("academic_year_id")
+  label      String           @unique @db.VarChar(20) // "2026 - 2027"
+  startDate  DateTime         @map("start_date") @db.Date
+  endDate    DateTime         @map("end_date") @db.Date
+  isCurrent  Boolean          @default(false) @map("is_current")
+  clearances Clearance[]
+  deadlines  OfficeDeadline[]
+  reminders  Reminder[]
+
+  @@map("academic_years")
+}
+
+model Office {
+  id           Int              @id @default(autoincrement()) @map("office_id")
+  code         String           @unique @db.VarChar(20) // slug, e.g. "library"
+  name         String           @db.VarChar(80)
+  icon         String           @default("file") @db.VarChar(20) // book|wallet|file|heart|cap|box
+  contactEmail String           @map("contact_email") @db.VarChar(190)
+  officeHours  String           @map("office_hours") @db.VarChar(80)
+  sortOrder    Int              @default(0) @map("sort_order") @db.SmallInt
+  isActive     Boolean          @default(true) @map("is_active")
+  /// At the office deadline, clear students still pending with no upload waiting whom the office never updated.
+  autoClear    Boolean          @default(false) @map("auto_clear")
+  /// Email the office's staff at 8:00 AM Manila when uploads, student messages or an auto-clear are waiting.
+  dailyDigest  Boolean          @default(false) @map("daily_digest")
+  staff        OfficeStaff[]
+  items        ClearanceItem[]
+  deadlines    OfficeDeadline[]
+  reminders    Reminder[]
+
+  @@map("offices")
+}
+
+model User {
+  id                 Int       @id @default(autoincrement()) @map("user_id")
+  email              String    @unique @db.VarChar(190) // always stored lowercase
+  passwordHash       String    @map("password_hash") @db.VarChar(255)
+  role               Role
+  fullName           String?   @map("full_name") @db.VarChar(120) // admins only; staff → office_staff, students → students
+  personalEmail      String?   @unique @map("personal_email") @db.VarChar(190)
+  phone              String?   @db.VarChar(20)
+  avatarKey          String?   @map("avatar_name") @db.VarChar(200) // object key in storage
+  avatarMime         String?   @map("avatar_mime") @db.VarChar(40)
+  mustChangePassword Boolean   @default(false) @map("must_change_password")
+  isActive           Boolean   @default(true) @map("is_active")
+  lastLoginAt        DateTime? @map("last_login_at") @db.Timestamptz(3)
+  createdAt          DateTime  @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt          DateTime  @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  student                 Student?
+  staffProfile            OfficeStaff?
+  sessions                Session[]
+  notifications           Notification[]
+  passwordResets          PasswordReset[]
+  passwordRequests        PasswordRequest[]  @relation("PasswordRequestUser")
+  decidedPasswordRequests PasswordRequest[]  @relation("PasswordRequestDecider")
+  reviewedApplications    Application[]      @relation("ApplicationReviewer")
+  applications            Application[]      @relation("ApplicationAccount")
+  updatedItems            ClearanceItem[]    @relation("ItemUpdatedBy")
+  itemLogs                ClearanceItemLog[]
+  submissions             Submission[]       @relation("SubmissionStudent")
+  reviewedSubmissions     Submission[]       @relation("SubmissionReviewer")
+  messages                OfficeMessage[]
+  adminActions            AdminAction[]
+  deadlinesSet            OfficeDeadline[]
+  reminders               Reminder[]
+
+  @@map("users")
+}
+
+/// NEW table: replaces the PHP session (see §8.1).
+model Session {
+  id         String   @id @db.Char(64) // sha256(hex) of the random cookie token
+  userId     Int      @map("user_id")
+  remember   Boolean  @default(false)
+  expiresAt  DateTime @map("expires_at") @db.Timestamptz(3)
+  lastSeenAt DateTime @default(now()) @map("last_seen_at") @db.Timestamptz(3)
+  createdAt  DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@map("sessions")
+}
+
+model Application {
+  id                   Int               @id @default(autoincrement()) @map("application_id")
+  reference            String?           @unique @db.VarChar(20) // APP-YYYY-NNNN, set right after insert
+  status               ApplicationStatus @default(pending)
+  statusToken          String            @map("status_token") @db.Char(64) // sha256 of the browser's token
+  photoKey             String?           @map("photo_name") @db.VarChar(200)
+  photoMime            String?           @map("photo_mime") @db.VarChar(30)
+  admissionType        String            @map("admission_type") @db.VarChar(40)
+  programId            Int               @map("program_id")
+  yearLevel            Int               @map("year_level") @db.SmallInt // 1..4 (CHECK in raw SQL)
+  lastName             String            @map("last_name") @db.VarChar(60)
+  firstName            String            @map("first_name") @db.VarChar(60)
+  middleName           String?           @map("middle_name") @db.VarChar(60)
+  suffix               String?           @db.VarChar(10)
+  sex                  Sex
+  civilStatus          String            @map("civil_status") @db.VarChar(20)
+  birthday             DateTime          @db.Date
+  placeOfBirth         String?           @map("place_of_birth") @db.VarChar(120)
+  personalEmail        String            @map("personal_email") @db.VarChar(190)
+  contactNumber        String            @map("contact_number") @db.VarChar(20)
+  religion             String?           @db.VarChar(60)
+  permanentAddress     String?           @map("permanent_address") @db.VarChar(255)
+  region               String            @db.VarChar(80)
+  province             String            @db.VarChar(80)
+  city                 String            @db.VarChar(80)
+  barangay             String            @db.VarChar(80)
+  street               String            @db.VarChar(160)
+  postalCode           String?           @map("postal_code") @db.VarChar(10)
+  fatherFirst          String            @map("father_first") @db.VarChar(60)
+  fatherMiddle         String?           @map("father_middle") @db.VarChar(60)
+  fatherLast           String            @map("father_last") @db.VarChar(60)
+  fatherOccupation     String            @map("father_occupation") @db.VarChar(80)
+  motherFirst          String            @map("mother_first") @db.VarChar(60)
+  motherMiddle         String?           @map("mother_middle") @db.VarChar(60)
+  motherLast           String            @map("mother_last") @db.VarChar(60)
+  motherOccupation     String            @map("mother_occupation") @db.VarChar(80)
+  guardianFirst        String            @map("guardian_first") @db.VarChar(60)
+  guardianMiddle       String?           @map("guardian_middle") @db.VarChar(60)
+  guardianLast         String            @map("guardian_last") @db.VarChar(60)
+  guardianRelationship String            @map("guardian_relationship") @db.VarChar(40)
+  guardianContact      String            @map("guardian_contact") @db.VarChar(20)
+  submittedAt          DateTime          @default(now()) @map("submitted_at") @db.Timestamptz(3)
+  reviewedById         Int?              @map("reviewed_by")
+  reviewedAt           DateTime?         @map("reviewed_at") @db.Timestamptz(3)
+  rejectReason         String?           @map("reject_reason") @db.VarChar(255)
+  userId               Int?              @map("user_id")
+  tempPassword         String?           @map("temp_password") @db.VarChar(40) // see §17 (plaintext, legacy)
+
+  program    Program   @relation(fields: [programId], references: [id])
+  reviewedBy User?     @relation("ApplicationReviewer", fields: [reviewedById], references: [id], onDelete: SetNull)
+  user       User?     @relation("ApplicationAccount", fields: [userId], references: [id], onDelete: SetNull)
+  students   Student[]
+
+  @@index([status, submittedAt])
+  @@index([personalEmail])
+  @@map("applications")
+}
+
+model Student {
+  id               Int          @id @default(autoincrement()) @map("student_id")
+  userId           Int          @unique @map("user_id")
+  studentNumber    String       @unique @map("student_number") @db.VarChar(20) // YYYY-NNNNN
+  firstName        String       @map("first_name") @db.VarChar(60)
+  lastName         String       @map("last_name") @db.VarChar(60)
+  programId        Int          @map("program_id")
+  yearLevel        Int          @map("year_level") @db.SmallInt
+  applicationId    Int?         @map("application_id")
+  currentAddress   String?      @map("current_address") @db.VarChar(255) // NULL = use application address
+  emergencyName    String?      @map("emergency_name") @db.VarChar(120) // NULL = use guardian
+  emergencyContact String?      @map("emergency_contact") @db.VarChar(20)
+  user             User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  program          Program      @relation(fields: [programId], references: [id])
+  application      Application? @relation(fields: [applicationId], references: [id], onDelete: SetNull)
+  clearances       Clearance[]
+
+  @@index([programId])
+  @@map("students")
+}
+
+model OfficeStaff {
+  userId   Int     @id @map("user_id")
+  officeId Int     @map("office_id")
+  fullName String  @map("full_name") @db.VarChar(120)
+  position String? @db.VarChar(80)
+  user     User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  office   Office  @relation(fields: [officeId], references: [id])
+
+  @@index([officeId])
+  @@map("office_staff")
+}
+
+model Clearance {
+  id             Int             @id @default(autoincrement()) @map("clearance_id")
+  studentId      Int             @map("student_id")
+  academicYearId Int             @map("academic_year_id")
+  term           Term
+  createdAt      DateTime        @default(now()) @map("created_at") @db.Timestamptz(3)
+  student        Student         @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  academicYear   AcademicYear    @relation(fields: [academicYearId], references: [id])
+  items          ClearanceItem[]
+
+  @@unique([studentId, academicYearId, term])
+  @@index([academicYearId])
+  @@map("clearances")
+}
+
+model ClearanceItem {
+  id            Int                @id @default(autoincrement()) @map("item_id")
+  clearanceId   Int                @map("clearance_id")
+  officeId      Int                @map("office_id")
+  status        ItemStatus         @default(pending)
+  task          String             @db.VarChar(160) // headline, e.g. "Return 1 unreturned book"
+  remarks       String             @db.VarChar(120) // short tile note
+  description   String             @db.VarChar(255) // one sentence for the student
+  nextStep      String?            @map("next_step") @db.VarChar(255) // NULL once approved
+  dueAt         DateTime?          @map("due_at") @db.Timestamptz(3) // student's own deadline; NULL = office deadline
+  updatedById   Int?               @map("updated_by")
+  updatedAt     DateTime           @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(3)
+  approvedAt    DateTime?          @map("approved_at") @db.Timestamptz(3)
+  clearance     Clearance          @relation(fields: [clearanceId], references: [id], onDelete: Cascade)
+  office        Office             @relation(fields: [officeId], references: [id])
+  updatedBy     User?              @relation("ItemUpdatedBy", fields: [updatedById], references: [id], onDelete: SetNull)
+  logs          ClearanceItemLog[]
+  submissions   Submission[]
+  messages      OfficeMessage[]
+  notifications Notification[]
+  reminders     Reminder[]
+  alerts        DeadlineAlert[]
+
+  @@unique([clearanceId, officeId])
+  @@index([officeId, status])
+  @@map("clearance_items")
+}
+
+model ClearanceItemLog {
+  id          Int           @id @default(autoincrement()) @map("log_id")
+  itemId      Int           @map("item_id")
+  oldStatus   ItemStatus?   @map("old_status")
+  newStatus   ItemStatus    @map("new_status")
+  note        String?       @db.VarChar(255)
+  changedById Int?          @map("changed_by")
+  changedAt   DateTime      @default(now()) @map("changed_at") @db.Timestamptz(3)
+  item        ClearanceItem @relation(fields: [itemId], references: [id], onDelete: Cascade)
+  changedBy   User?         @relation(fields: [changedById], references: [id], onDelete: SetNull)
+
+  @@index([itemId, changedAt])
+  @@map("clearance_item_logs")
+}
+
+model Submission {
+  id             Int              @id @default(autoincrement()) @map("submission_id")
+  itemId         Int              @map("item_id")
+  reference      String?          @unique @db.VarChar(20) // e.g. LIB-2026-0007
+  storageKey     String           @map("stored_name") @db.VarChar(200) // random object key, never the user's file name
+  originalName   String           @map("original_name") @db.VarChar(160)
+  mimeType       String           @map("mime_type") @db.VarChar(60)
+  fileSize       Int              @map("file_size")
+  studentNote    String?          @map("student_note") @db.VarChar(255)
+  status         SubmissionStatus @default(submitted)
+  submittedById  Int?             @map("submitted_by")
+  submittedAt    DateTime         @default(now()) @map("submitted_at") @db.Timestamptz(3)
+  reviewedById   Int?             @map("reviewed_by")
+  reviewedAt     DateTime?        @map("reviewed_at") @db.Timestamptz(3)
+  returnCategory String?          @map("return_category") @db.VarChar(80)
+  reviewNote     String?          @map("review_note") @db.VarChar(500)
+  checklist      Json? // string[] of ticked checklist lines (legacy: JSON text in VARCHAR(500))
+  item           ClearanceItem    @relation(fields: [itemId], references: [id], onDelete: Cascade)
+  submittedBy    User?            @relation("SubmissionStudent", fields: [submittedById], references: [id], onDelete: SetNull)
+  reviewedBy     User?            @relation("SubmissionReviewer", fields: [reviewedById], references: [id], onDelete: SetNull)
+
+  @@index([itemId, submittedAt])
+  @@index([status, submittedAt])
+  @@index([reviewedAt])
+  @@map("submissions")
+}
+
+model OfficeMessage {
+  id         Int           @id @default(autoincrement()) @map("message_id")
+  itemId     Int           @map("item_id")
+  senderId   Int?          @map("sender_id")
+  senderRole Role          @map("sender_role")
+  body       String        @db.VarChar(1000)
+  createdAt  DateTime      @default(now()) @map("created_at") @db.Timestamptz(3)
+  readAt     DateTime?     @map("read_at") @db.Timestamptz(3) // NULL = the other side hasn't opened it
+  item       ClearanceItem @relation(fields: [itemId], references: [id], onDelete: Cascade)
+  sender     User?         @relation(fields: [senderId], references: [id], onDelete: SetNull)
+
+  @@index([itemId, createdAt])
+  @@index([readAt, senderRole])
+  @@map("office_messages")
+}
+
+model Notification {
+  id        Int              @id @default(autoincrement()) @map("notification_id")
+  userId    Int              @map("user_id")
+  itemId    Int?             @map("item_id")
+  tone      NotificationTone @default(info)
+  title     String           @db.VarChar(120)
+  body      String           @db.VarChar(255)
+  link      String?          @db.VarChar(255) // app-relative path, e.g. "/review/12" (staff/admin only)
+  isRead    Boolean          @default(false) @map("is_read")
+  createdAt DateTime         @default(now()) @map("created_at") @db.Timestamptz(3)
+  user      User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  item      ClearanceItem?   @relation(fields: [itemId], references: [id], onDelete: SetNull)
+
+  @@index([userId, isRead, createdAt])
+  @@index([link]) // NEW: send-message deletes unread notifications by link
+  @@map("notifications")
+}
+
+model PasswordReset {
+  id        Int       @id @default(autoincrement()) @map("reset_id")
+  userId    Int       @map("user_id")
+  tokenHash String    @unique @map("token_hash") @db.Char(64)
+  expiresAt DateTime  @map("expires_at") @db.Timestamptz(3)
+  usedAt    DateTime? @map("used_at") @db.Timestamptz(3)
+  createdAt DateTime  @default(now()) @map("created_at") @db.Timestamptz(3)
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@map("password_resets")
+}
+
+/// NEW: a student asks on Forgot password; the Registrar or an admin allows it after checking the school ID in person.
+model PasswordRequest {
+  id            Int                   @id @default(autoincrement()) @map("request_id")
+  userId        Int                   @map("user_id")
+  code          String                @db.Char(6) // shown on the student's screen and the staff list; not a secret
+  tokenHash     String                @unique @map("token_hash") @db.Char(64) // sha256 of the requesting device's secret
+  status        PasswordRequestStatus @default(pending)
+  ipAddress     String                @map("ip_address") @db.VarChar(45)
+  createdAt     DateTime              @default(now()) @map("created_at") @db.Timestamptz(3)
+  expiresAt     DateTime              @map("expires_at") @db.Timestamptz(3) // created_at + 24 h
+  decidedById   Int?                  @map("decided_by")
+  decidedAt     DateTime?             @map("decided_at") @db.Timestamptz(3)
+  approvedUntil DateTime?             @map("approved_until") @db.Timestamptz(3) // decided_at + 15 min
+  usedAt        DateTime?             @map("used_at") @db.Timestamptz(3)
+  user          User                  @relation("PasswordRequestUser", fields: [userId], references: [id], onDelete: Cascade)
+  decidedBy     User?                 @relation("PasswordRequestDecider", fields: [decidedById], references: [id], onDelete: SetNull)
+
+  @@index([status, createdAt])
+  @@index([userId])
+  @@map("password_requests")
+}
+
+/// Also used to throttle applications (login = "apply:<email>", succeeded = false).
+model LoginAttempt {
+  id          Int      @id @default(autoincrement()) @map("attempt_id")
+  login       String   @db.VarChar(190) // lowercased
+  ipAddress   String   @map("ip_address") @db.VarChar(45)
+  succeeded   Boolean
+  attemptedAt DateTime @default(now()) @map("attempted_at") @db.Timestamptz(3)
+
+  @@index([login, attemptedAt])
+  @@index([ipAddress, attemptedAt])
+  @@map("login_attempts")
+}
+
+/// "Admin" is historical: staff deadline/reminder actions are logged here too.
+model AdminAction {
+  id        Int      @id @default(autoincrement()) @map("action_id")
+  userId    Int?     @map("user_id")
+  action    String   @db.VarChar(60)
+  details   String   @db.VarChar(500)
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+  user      User?    @relation(fields: [userId], references: [id], onDelete: SetNull)
+
+  @@index([createdAt])
+  @@map("admin_actions")
+}
+
+model OfficeDeadline {
+  id                Int          @id @default(autoincrement()) @map("deadline_id")
+  officeId          Int          @map("office_id")
+  academicYearId    Int          @map("academic_year_id")
+  term              Term
+  dueAt             DateTime     @map("due_at") @db.Timestamptz(3)
+  note              String?      @db.VarChar(255)
+  setById           Int?         @map("set_by")
+  passedNotifiedAt  DateTime?    @map("passed_notified_at") @db.Timestamptz(3)
+  /// When the office was warned that this deadline clears students automatically; auto-clear runs only after it.
+  autoClearWarnedAt DateTime?    @map("auto_clear_warned_at") @db.Timestamptz(3)
+  updatedAt         DateTime     @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(3)
+  office            Office       @relation(fields: [officeId], references: [id], onDelete: Cascade)
+  academicYear      AcademicYear @relation(fields: [academicYearId], references: [id], onDelete: Cascade)
+  setBy             User?        @relation(fields: [setById], references: [id], onDelete: SetNull)
+
+  @@unique([officeId, academicYearId, term])
+  @@map("office_deadlines")
+}
+
+model Reminder {
+  id             Int              @id @default(autoincrement()) @map("reminder_id")
+  officeId       Int?             @map("office_id") // NULL = every office (admin)
+  itemId         Int?             @map("item_id") // audience = student
+  academicYearId Int              @map("academic_year_id")
+  term           Term
+  audience       ReminderAudience
+  message        String           @db.VarChar(255)
+  sendAt         DateTime         @map("send_at") @db.Timestamptz(3)
+  sentAt         DateTime?        @map("sent_at") @db.Timestamptz(3) // NULL = still scheduled
+  cancelledAt    DateTime?        @map("cancelled_at") @db.Timestamptz(3)
+  recipients     Int?
+  createdById    Int?             @map("created_by")
+  createdAt      DateTime         @default(now()) @map("created_at") @db.Timestamptz(3)
+  office         Office?          @relation(fields: [officeId], references: [id], onDelete: Cascade)
+  item           ClearanceItem?   @relation(fields: [itemId], references: [id], onDelete: Cascade)
+  academicYear   AcademicYear     @relation(fields: [academicYearId], references: [id], onDelete: Cascade)
+  createdBy      User?            @relation(fields: [createdById], references: [id], onDelete: SetNull)
+
+  @@index([sentAt, cancelledAt, sendAt])
+  @@map("reminders")
+}
+
+/// One row per automatic alert already sent; the PK makes each alert go out once.
+model DeadlineAlert {
+  itemId Int           @map("item_id")
+  stage  AlertStage
+  dueAt  DateTime      @map("due_at") @db.Timestamptz(3) // a new deadline gets new alerts
+  sentAt DateTime      @default(now()) @map("sent_at") @db.Timestamptz(3)
+  item   ClearanceItem @relation(fields: [itemId], references: [id], onDelete: Cascade)
+
+  @@id([itemId, stage, dueAt])
+  @@map("deadline_alerts")
+}
+
+/// NEW (optional): throttle row for the lazy scheduler fallback (§8.9).
+model JobState {
+  name      String   @id
+  lastRunAt DateTime @map("last_run_at") @db.Timestamptz(3)
+
+  @@map("job_state")
+}

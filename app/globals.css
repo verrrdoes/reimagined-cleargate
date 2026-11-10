@@ -1,0 +1,420 @@
+/*
+ * ClearGate global styles: Tailwind v4 (theme and utilities, no Preflight), the design tokens and the base.
+ * Components style themselves with utilities; shared recipes live in components/ui/recipes.ts.
+ * Colours come only from the tokens below: Tailwind's default palette is switched off.
+ */
+
+@layer theme, base, components, utilities;
+@import "tailwindcss/theme.css" layer(theme);
+@import "tailwindcss/utilities.css" layer(utilities);
+
+@custom-variant dark (&:where([data-theme="dark"], [data-theme="dark"] *));
+
+@theme {
+  --color-*: initial;
+  --font-*: initial;
+  --text-*: initial;
+
+  --color-white: #ffffff;
+  --color-black: #000000;
+
+  /* Sizes set font-size only; line-height is inherited (1.5 from body) unless a leading-* is given. */
+  --text-10: 10px;
+  --text-11: 11px;
+  --text-12: 12px;
+  --text-13: 13px;
+  --text-14: 14px;
+  --text-15: 15px;
+  --text-16: 16px;
+  --text-22: 22px;
+  --text-28: 28px;
+  --text-32: 32px;
+  --text-40: 40px;
+
+  --animate-spinner: cg-spin 0.7s linear infinite;
+  --animate-toast-in: cg-toast-in 0.18s ease-out;
+  --animate-skel-in: cg-skel-in 0.2s ease-out 0.15s both;
+  --animate-skel-pulse: cg-skel-pulse 1.6s ease-in-out infinite;
+
+  @keyframes cg-spin {
+    to {
+      transform: rotate(360deg);
+    }
+  }
+
+  @keyframes cg-toast-in {
+    from {
+      opacity: 0;
+      transform: translateY(6px);
+    }
+  }
+
+  @keyframes cg-skel-in {
+    from {
+      opacity: 0;
+    }
+  }
+
+  @keyframes cg-skel-pulse {
+    50% {
+      opacity: 0.5;
+    }
+  }
+}
+
+/* Always emitted, so var(--radius-card) and friends work in arbitrary values too. */
+@theme static {
+  --radius-card: 8px;
+  --radius-control: 6px;
+  --radius-sheet: 16px;
+
+  --spacing-control: 32px;
+  --spacing-row: 48px;
+  --spacing-inset: 8px;
+  --spacing-sidebar: 228px;
+  --spacing-topbar: 48px;
+}
+
+/* Utilities read the tokens directly, so the light/dark switch below drives every colour. */
+@theme inline {
+  --color-ground: var(--ground);
+  --color-surface: var(--surface);
+  --color-raised: var(--raised);
+  --color-active: var(--active);
+  --color-border: var(--border);
+  --color-rule: var(--rule);
+  --color-control: var(--control);
+  --color-text: var(--text);
+  --color-muted: var(--muted);
+  --color-accent: var(--accent);
+  --color-on-accent: var(--on-accent);
+  --color-positive: var(--positive);
+  --color-negative: var(--negative);
+  --color-negative-line: var(--negative-line);
+  --color-on-negative: var(--on-negative);
+  --color-warning: var(--warning);
+  --color-action-line: var(--action-line);
+  --color-ink: var(--ink);
+  --color-ink-text: var(--ink-text);
+  --color-ink-hover: var(--ink-hover);
+  --color-scrim: var(--scrim);
+  --color-pill-action-bg: var(--pill-action-bg);
+  --color-pill-action-fg: var(--pill-action-fg);
+  --color-pill-pending-bg: var(--pill-pending-bg);
+  --color-pill-pending-fg: var(--pill-pending-fg);
+  --color-pill-approved-bg: var(--pill-approved-bg);
+  --color-pill-approved-fg: var(--pill-approved-fg);
+  --color-pill-overdue-bg: var(--pill-overdue-bg);
+  --color-pill-overdue-fg: var(--pill-overdue-fg);
+  --color-pill-info-bg: var(--pill-info-bg);
+  --color-pill-info-fg: var(--pill-info-fg);
+  --color-pill-muted-bg: var(--pill-muted-bg);
+  --color-pill-muted-fg: var(--pill-muted-fg);
+
+  --font-sans: var(--font-plex-sans), "IBM Plex Sans", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --font-code: var(--font-plex-mono), ui-monospace, "SFMono-Regular", Consolas, monospace; /* taste-skill-ignore: IDs and references only */
+
+  --spacing-pad: var(--pad);
+  --shadow-overlay: var(--shadow-pop); /* taste-skill-ignore: overlays only */
+}
+
+/* ---------- Tokens ---------- */
+
+:root {
+  color-scheme: light;
+
+  --ground: #f3f5f8;
+  --surface: #ffffff;
+  --raised: #f4f6f8;
+  --active: #e9edf2;
+  --border: #e6e9ed;
+  --rule: #f0f2f4;
+  --control: #cdd1d6;
+  --text: #131416;
+  --muted: #5d6168;
+  --accent: #1565c0;
+  --on-accent: #ffffff;
+  --positive: #1e7b4f;
+  --negative: #c4242a;
+  --negative-line: #ecb4b6;
+  --on-negative: #ffffff;
+  --warning: #92400e;
+  --action-line: #c2410c;
+
+  --ink: #131416;
+  --ink-text: #ffffff;
+  --ink-hover: #2c2e33;
+  --scrim: rgba(19, 20, 22, 0.36);
+  --shadow-pop: 0 1px 2px rgba(19, 20, 22, 0.06), 0 8px 24px rgba(19, 20, 22, 0.12); /* taste-skill-ignore: overlays only */
+
+  --pill-action-bg: #fff1e6;
+  --pill-action-fg: #9a3412;
+  --pill-pending-bg: #fef6dc;
+  --pill-pending-fg: #854d0e;
+  --pill-approved-bg: #dcfae5;
+  --pill-approved-fg: #14532d;
+  --pill-overdue-bg: #ffedea;
+  --pill-overdue-fg: #831c1e;
+  --pill-info-bg: #e8f0fb;
+  --pill-info-fg: #0d47a1;
+  --pill-muted-bg: #eceef1;
+  --pill-muted-fg: #3d4148;
+
+  --chevron: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='%235d6168' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E");
+
+  --control-h: 32px;
+  --row-h: 48px;
+  --gap: 24px;
+  --pad: 24px;
+  --sidebar-w: 228px;
+  --topbar-h: 48px;
+  --inset: 8px;
+
+  --font-sans: var(--font-plex-sans), "IBM Plex Sans", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --font-code: var(--font-plex-mono), ui-monospace, "SFMono-Regular", Consolas, monospace; /* taste-skill-ignore: IDs and references only */
+}
+
+:root[data-theme="dark"] {
+  color-scheme: dark;
+
+  --ground: #0f1012;
+  --surface: #16171a;
+  --raised: #1d1f23;
+  --active: #262930;
+  --border: #26282c;
+  --rule: #202226;
+  --control: #3b3e45;
+  --text: #f1f2f4;
+  --muted: #a4a8af;
+  --accent: #6aa5f0;
+  --on-accent: #0f1012;
+  --positive: #4cc38a;
+  --negative: #f2726f;
+  --negative-line: #6b2b2d;
+  /* White on the lighter dark-theme red is 2.8:1; near-black is 6.7:1. */
+  --on-negative: #0f1012;
+  --warning: #e3a75a;
+  --action-line: #f08a4b;
+
+  --ink: #f1f2f4;
+  --ink-text: #131416;
+  --ink-hover: #d6d8dc;
+  --scrim: rgba(0, 0, 0, 0.6);
+  --shadow-pop: 0 1px 2px rgba(0, 0, 0, 0.4), 0 8px 24px rgba(0, 0, 0, 0.45); /* taste-skill-ignore: overlays only */
+
+  --pill-action-bg: #3a2416;
+  --pill-action-fg: #fdba8c;
+  --pill-pending-bg: #352a12;
+  --pill-pending-fg: #f3d27c;
+  --pill-approved-bg: #13301f;
+  --pill-approved-fg: #8fe3b0;
+  --pill-overdue-bg: #3b1a1b;
+  --pill-overdue-fg: #f7a8a5;
+  --pill-info-bg: #142640;
+  --pill-info-fg: #a8c9f5;
+  --pill-muted-bg: #26282c;
+  --pill-muted-fg: #c9ccd1;
+
+  --chevron: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='%23a4a8af' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E");
+}
+
+@media (max-width: 639.98px) {
+  :root {
+    --pad: 16px;
+  }
+}
+
+/* ---------- Base ---------- */
+
+@layer base {
+  *,
+  *::before,
+  *::after {
+    box-sizing: border-box;
+    border-width: 0;
+    border-style: solid;
+  }
+
+  html {
+    -webkit-text-size-adjust: 100%;
+    text-size-adjust: 100%;
+  }
+
+  body {
+    margin: 0;
+    min-height: 100svh;
+    background: var(--ground);
+    color: var(--text);
+    font-family: var(--font-sans);
+    font-size: 14px;
+    line-height: 1.5;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+
+  h1,
+  h2,
+  h3,
+  h4,
+  p,
+  figure,
+  blockquote,
+  dl,
+  dd {
+    margin: 0;
+  }
+
+  h1 {
+    font-size: 22px;
+    font-weight: 600;
+    line-height: 1.3;
+  }
+
+  h2 {
+    font-size: 16px;
+    font-weight: 600;
+    line-height: 1.4;
+  }
+
+  h3,
+  h4 {
+    font-size: 14px;
+    font-weight: 600;
+    line-height: 1.4;
+  }
+
+  a {
+    color: var(--accent);
+    text-decoration: none;
+  }
+
+  a:hover {
+    text-decoration: underline;
+    text-underline-offset: 2px;
+  }
+
+  button,
+  input,
+  select,
+  textarea {
+    font: inherit;
+    color: inherit;
+  }
+
+  button {
+    cursor: pointer;
+  }
+
+  img,
+  svg,
+  video {
+    max-width: 100%;
+  }
+
+  svg {
+    flex-shrink: 0;
+  }
+
+  hr {
+    border-top-width: 1px;
+    border-color: var(--rule);
+    margin: 16px 0;
+  }
+
+  fieldset {
+    margin: 0;
+    padding: 0;
+    min-width: 0;
+  }
+
+  legend {
+    padding: 0;
+    font-weight: 600;
+  }
+
+  :focus-visible {
+    outline: 2px solid var(--accent);
+    outline-offset: 2px;
+  }
+
+  ::selection {
+    background: var(--pill-info-bg);
+    color: var(--pill-info-fg);
+  }
+
+  [hidden] {
+    display: none !important;
+  }
+
+  html:has(dialog[open]) {
+    overflow: hidden;
+  }
+
+  @media (max-width: 1023.98px) {
+    html:has([data-nav-open="true"]) {
+      overflow: hidden;
+    }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    *,
+    *::before,
+    *::after {
+      animation-duration: 0.01ms !important;
+      animation-iteration-count: 1 !important;
+      transition-duration: 0.01ms !important;
+      transition-delay: 0s !important;
+      scroll-behavior: auto !important;
+    }
+  }
+
+  @media print {
+    body {
+      background: #ffffff;
+    }
+
+    a {
+      color: inherit;
+    }
+
+    * {
+      print-color-adjust: exact;
+      -webkit-print-color-adjust: exact;
+    }
+  }
+}
+
+/* ---------- Print: the light palette, whatever the screen theme ---------- */
+
+@media print {
+  :root,
+  :root[data-theme="dark"] {
+    color-scheme: light;
+    --ground: #ffffff;
+    --surface: #ffffff;
+    --raised: #f4f6f8;
+    --active: #e9edf2;
+    --border: #d9dde2;
+    --rule: #e6e9ed;
+    --control: #cdd1d6;
+    --text: #131416;
+    --muted: #5d6168;
+    --accent: #1565c0;
+    --positive: #1e7b4f;
+    --negative: #c4242a;
+    --warning: #92400e;
+    --action-line: #c2410c;
+    --pill-action-bg: #fff1e6;
+    --pill-action-fg: #9a3412;
+    --pill-pending-bg: #fef6dc;
+    --pill-pending-fg: #854d0e;
+    --pill-approved-bg: #dcfae5;
+    --pill-approved-fg: #14532d;
+    --pill-overdue-bg: #ffedea;
+    --pill-overdue-fg: #831c1e;
+    --pill-info-bg: #e8f0fb;
+    --pill-info-fg: #0d47a1;
+    --pill-muted-bg: #eceef1;
+    --pill-muted-fg: #3d4148;
+  }
+}
