@@ -2,6 +2,7 @@ import 'server-only';
 import { cache } from 'react';
 import { db } from '@/lib/db';
 import { deadlineMap, effectiveDue, summarize } from '@/lib/services/clearance';
+import { studentRecords, type StudentRecord } from '@/lib/services/officeRecords';
 import { STATUS, TERM_LABEL } from '@/lib/constants';
 import type { SessionUser } from '@/lib/auth/session';
 import type { ItemStatus, SubmissionStatusName, TermName } from '@/lib/types';
@@ -74,6 +75,8 @@ export type StudentItem = {
   submission: StudentSubmission | null;
   /** `unread` counts office messages the student has not opened yet. */
   messages: { total: number; unread: number };
+  /** What the office has on record against the student (borrowed books, balances...), open ones first. */
+  records: StudentRecord[];
 };
 
 export type StudentClearance = {
@@ -141,9 +144,10 @@ export const getStudentClearance = cache(async (user: SessionUser): Promise<Stud
   const latest = new Map<number, StudentSubmission>();
   const totals = new Map<number, number>();
   const unread = new Map<number, number>();
+  let records = new Map<number, StudentRecord[]>();
 
   if (ids.length) {
-    const [submissions, totalCounts, unreadCounts] = await Promise.all([
+    const [submissions, totalCounts, unreadCounts, recordMap] = await Promise.all([
       db.submission.findMany({
         where: { itemId: { in: ids }, status: { not: 'replaced' } },
         orderBy: [{ submittedAt: 'asc' }, { id: 'asc' }],
@@ -168,7 +172,9 @@ export const getStudentClearance = cache(async (user: SessionUser): Promise<Stud
         where: { itemId: { in: ids }, senderRole: { not: 'student' }, readAt: null },
         _count: { _all: true },
       }),
+      studentRecords(ids, new Map(rows.map((r) => [r.id, r.office.code]))),
     ]);
+    records = recordMap;
 
     // Oldest first, so the last one written per item is the latest.
     for (const sub of submissions) {
@@ -213,6 +219,7 @@ export const getStudentClearance = cache(async (user: SessionUser): Promise<Stud
       dueNote: due.dueNote,
       submission: latest.get(r.id) ?? null,
       messages: { total: totals.get(r.id) ?? 0, unread: unread.get(r.id) ?? 0 },
+      records: records.get(r.id) ?? [],
     };
   });
 

@@ -7,6 +7,7 @@ import { dueLine } from '@/lib/deadline';
 import type { StudentItem } from '@/lib/services/student';
 import { formatDate, formatDateTime } from '@/lib/time';
 import { fileKind, fileSize, nextStepText, submissionFileUrl, uploadLabel } from './format';
+import { RecordList } from './RecordList';
 
 const BLOCK =
   'flex flex-col gap-2 py-4 border-t border-rule min-w-0 wrap-anywhere first:border-t-0 first:pt-0 last:pb-0';
@@ -97,6 +98,7 @@ export function OfficeDetailsDialog({
           </h3>
           <p className="font-medium">{item.task}</p>
           {item.description ? <p className="text-muted">{item.description}</p> : null}
+          <RecordList records={item.records} />
           {item.status !== 'approved' ? (
             <p className="flex items-start gap-1.5">
               <Icon name="arrow" size={14} className="mt-[3px] text-muted" />

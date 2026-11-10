@@ -155,6 +155,8 @@ model User {
   adminActions            AdminAction[]
   deadlinesSet            OfficeDeadline[]
   reminders               Reminder[]
+  recordsCreated          OfficeRecord[]     @relation("RecordCreatedBy")
+  recordsSettled          OfficeRecord[]     @relation("RecordSettledBy")
 
   @@map("users")
 }
@@ -301,6 +303,7 @@ model ClearanceItem {
   notifications Notification[]
   reminders     Reminder[]
   alerts        DeadlineAlert[]
+  records       OfficeRecord[]
 
   @@unique([clearanceId, officeId])
   @@index([officeId, status])
@@ -505,4 +508,24 @@ model JobState {
   lastRunAt DateTime @map("last_run_at") @db.Timestamptz(3)
 
   @@map("job_state")
+}
+
+/// Something an office has on record against a student for one clearance: an incomplete grade, a borrowed book, a
+/// balance, a missing document, a guidance requirement, borrowed equipment. `fields` holds the office's own details,
+/// named by the office's template in lib/officeRecords.ts. Open until the office settles it.
+model OfficeRecord {
+  id          Int           @id @default(autoincrement()) @map("record_id")
+  itemId      Int           @map("item_id")
+  fields      Json
+  createdById Int?          @map("created_by")
+  createdAt   DateTime      @default(now()) @map("created_at") @db.Timestamptz(3)
+  settledAt   DateTime?     @map("settled_at") @db.Timestamptz(3)
+  settledById Int?          @map("settled_by")
+  settleNote  String?       @map("settle_note") @db.VarChar(120) // e.g. the official receipt number or the final grade
+  item        ClearanceItem @relation(fields: [itemId], references: [id], onDelete: Cascade)
+  createdBy   User?         @relation("RecordCreatedBy", fields: [createdById], references: [id], onDelete: SetNull)
+  settledBy   User?         @relation("RecordSettledBy", fields: [settledById], references: [id], onDelete: SetNull)
+
+  @@index([itemId])
+  @@map("office_records")
 }

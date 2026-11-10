@@ -35,6 +35,7 @@ export function navItems(d: Pick<ShellData, 'portal' | 'isRegistrar' | 'isAdmin'
   }
   items.push(
     { href: '/office-status', label: 'Clearance status', icon: 'folder-check' },
+    { href: '/records', label: 'Records', icon: 'clipboard' },
     { href: '/deadlines', label: 'Deadlines', icon: 'clock' },
   );
   if (d.isRegistrar) {
@@ -70,6 +71,7 @@ const STAFF_SEARCH: Record<string, string> = {
   '/staff': 'Search pending submissions',
   '/history': 'Search review history',
   '/office-status': 'Search students',
+  '/records': 'Search records',
   '/messages': 'Search conversations',
   '/applications': 'Search applications',
   '/audit': 'Search the audit log',

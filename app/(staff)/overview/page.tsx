@@ -3,6 +3,8 @@ import Link from 'next/link';
 import { pageUser } from '@/lib/auth/guards';
 import { daysSince, deadlineState, waitedText } from '@/lib/officeOverview';
 import { officeOverview, type OfficeOverview } from '@/lib/services/officeOverview';
+import { openRecordCounts } from '@/lib/services/officeRecords';
+import { peso, templateFor } from '@/lib/officeRecords';
 import { officeChoices } from '@/lib/services/review';
 import { formatDateTime, formatTime, formatWeekdayDate } from '@/lib/time';
 import { Avatar } from '@/components/ui/Avatar';
@@ -84,6 +86,8 @@ export default async function StaffDashboardPage({ searchParams }: { searchParam
     );
   }
 
+  const records = await openRecordCounts(data.office.id, data.office.code);
+
   /** Admins keep their office choice on every link. */
   const q = (path: string, extra: Record<string, string> = {}) => {
     const p = new URLSearchParams({ ...(choices ? { office: data.office.code } : {}), ...extra });
@@ -127,7 +131,7 @@ export default async function StaffDashboardPage({ searchParams }: { searchParam
 
       <div className="mt-6 grid grid-cols-2 max-lg:grid-cols-1 gap-6">
         <WaitingPanel data={data} now={now} q={q} />
-        <NotClearedPanel data={data} now={now} q={q} />
+        <NotClearedPanel data={data} now={now} q={q} records={records} />
       </div>
 
       <div className="mt-6 grid grid-cols-2 max-lg:grid-cols-1 gap-6">
@@ -326,7 +330,9 @@ function WaitingPanel({ data, now, q }: Props) {
   );
 }
 
-function NotClearedPanel({ data, now, q }: Props) {
+type OpenRecords = Awaited<ReturnType<typeof openRecordCounts>>;
+
+function NotClearedPanel({ data, now, q, records }: Props & { records: OpenRecords }) {
   const { counts } = data;
   const owed = data.owed.slice(0, LIST_MAX);
   const more = counts.unreviewed - data.unreviewedNames.length;
@@ -345,6 +351,8 @@ function NotClearedPanel({ data, now, q }: Props) {
         <p className={quiet}>{counts.total === 0 ? 'No students yet.' : 'Every student is cleared.'}</p>
       ) : (
         <>
+          <OnRecord data={data} q={q} records={records} />
+
           <p className={subHead}>
             <span>With the student · {counts.student}</span>
             {owed.length > 0 ? <span className="font-normal">Since</span> : null}
@@ -468,5 +476,29 @@ function OfficePanel({ data, now, q }: Props) {
         <dd className="text-right">{onOff(data.office.dailyDigest)}</dd>
       </dl>
     </section>
+  );
+}
+
+/** What the office has on record against students this term (Records page), in one line. */
+function OnRecord({ data, q, records }: Pick<Props, 'data' | 'q'> & { records: OpenRecords }) {
+  const t = templateFor(data.office.code);
+  return (
+    <div className="mb-4 px-3 py-2.5 rounded-card bg-raised flex flex-wrap items-center justify-between gap-x-3 gap-y-1">
+      <p className="text-14">
+        {records.records ? (
+          <>
+            <strong className="font-semibold tabular-nums">{count(records.records, `open ${t.noun[0]}`, `open ${t.noun[1]}`)}</strong>
+            {' for '}
+            {count(records.students, 'student', 'students')}
+            {records.money > 0 ? ` · ${peso(records.money)}` : ''}
+          </>
+        ) : (
+          <span className="text-muted">No open {t.noun[1]} on record.</span>
+        )}
+      </p>
+      <Link href={q('/records')} className={cn(textLink, 'text-13 whitespace-nowrap')}>
+        {t.title}
+      </Link>
+    </div>
   );
 }

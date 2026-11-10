@@ -24,6 +24,7 @@ import { EvidenceLine } from '@/components/student/EvidenceLine';
 import { ItemActions } from '@/components/student/ItemActions';
 import { NoClearance } from '@/components/student/NoClearance';
 import { ProgressBar } from '@/components/student/ProgressBar';
+import { RecordList } from '@/components/student/RecordList';
 import { StudentDialogs } from '@/components/student/StudentDialogs';
 import { matchesQuery, nextStepText, plural, statusHref, studentLine } from '@/components/student/format';
 import { statusDot, studentLayout } from '@/components/student/layout';
@@ -148,7 +149,11 @@ export default async function RequirementsPage({ searchParams }: { searchParams:
                     <h3 className={cn(CHECK_TASK, item.status === 'approved' && 'text-muted font-medium')}>
                       {item.task}
                     </h3>
-                    {item.remarks ? <p className="text-muted">{item.remarks}</p> : null}
+                    {item.records.length ? (
+                      <RecordList records={item.records} className="my-0.5" />
+                    ) : item.remarks ? (
+                      <p className="text-muted">{item.remarks}</p>
+                    ) : null}
                     {item.status === 'approved' ? (
                       <p className={cn('text-12', textTone.approved)}>
                         Cleared{item.approvedAt ? ` ${formatDate(item.approvedAt)}` : ''}
